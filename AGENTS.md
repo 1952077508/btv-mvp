@@ -10,11 +10,22 @@ Two-person remote sync video player. Android + FastAPI/WebSocket + Redis.
 | backend | 8000 | FastAPI HTTP + WebSocket |
 | apk-server | 8080 | Nginx, serves `apk-server/apk/` with autoindex |
 
+## CI/CD (GitHub Actions)
+
+Push to `main` triggers `.github/workflows/build-apk.yml` which:
+- Sets up JDK 17 + Android SDK 35
+- Runs `./gradlew assembleDebug`
+- Uploads APK as workflow artifact
+
+APK download: Actions tab → latest run → Artifacts → `BTVSync-debug`.
+
+Local builds of APK require JDK 17 + Android SDK (this machine has 1.6 GB RAM — too low for Gradle). Use GitHub Actions instead.
+
 ## Key command
 
 ```bash
 docker compose up -d          # start all three services
-./build_apk.sh                # assembleDebug + copy APK to apk-server/apk/
+./build_apk.sh                # local assembleDebug + copy APK (needs Android SDK)
 ```
 
 No test suite exists yet. Backend syntax check: `python3 -c "import ast; ..."` against each `.py`.
