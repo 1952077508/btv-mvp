@@ -1,0 +1,22 @@
+# Android
+android/*/build/
+android/.gradle/
+android/local.properties
+android/.idea/
+*.iml
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Docker
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# APK output
+apk-server/apk/*.apk
+!apk-server/apk/.gitkeep
