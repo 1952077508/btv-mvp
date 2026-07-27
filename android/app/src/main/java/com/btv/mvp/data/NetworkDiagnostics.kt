@@ -2,8 +2,6 @@ package com.btv.mvp.data
 
 import kotlinx.coroutines.*
 import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -71,7 +69,7 @@ object NetworkDiagnostics {
             ))
         }
 
-        // Step 3: HTTP POST to /api/room/create
+        // Step 3: HTTP GET /api/health
         start = System.currentTimeMillis()
         try {
             val client = OkHttpClient.Builder()
@@ -79,12 +77,12 @@ object NetworkDiagnostics {
                 .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
                 .build()
             val request = Request.Builder()
-                .url("$serverUrl/api/room/create")
-                .post("{}".toRequestBody("application/json".toMediaType()))
+                .url("$serverUrl/api/health")
+                .get()
                 .build()
             val response = client.newCall(request).execute()
             results.add(DiagResult(
-                step = "HTTP POST /api/room/create",
+                step = "HTTP GET /api/health",
                 success = response.isSuccessful,
                 detail = if (response.isSuccessful) "HTTP ${response.code} OK" else "HTTP ${response.code} ${response.message}",
                 durationMs = System.currentTimeMillis() - start
@@ -92,14 +90,14 @@ object NetworkDiagnostics {
             response.close()
         } catch (e: IOException) {
             results.add(DiagResult(
-                step = "HTTP POST /api/room/create",
+                step = "HTTP GET /api/health",
                 success = false,
                 detail = "请求失败: ${e.message}",
                 durationMs = System.currentTimeMillis() - start
             ))
         } catch (e: Exception) {
             results.add(DiagResult(
-                step = "HTTP POST /api/room/create",
+                step = "HTTP GET /api/health",
                 success = false,
                 detail = "异常: ${e.message}",
                 durationMs = System.currentTimeMillis() - start

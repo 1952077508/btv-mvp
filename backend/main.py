@@ -234,6 +234,11 @@ async def api_history(user_id: str = Header(None, alias="X-User-Id")):
 
 # --- admin ---
 
+@app.get("/api/health")
+async def api_health():
+    return {"status": "ok"}
+
+
 @app.get("/api/admin/stats")
 async def api_admin_stats(user_id: str = Header(None, alias="X-User-Id")):
     if not user_id:
