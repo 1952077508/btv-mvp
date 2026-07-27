@@ -20,3 +20,6 @@ Thumbs.db
 # APK output
 apk-server/apk/*.apk
 !apk-server/apk/.gitkeep
+backend/.venv/
+backend/venv
+backend/.venv

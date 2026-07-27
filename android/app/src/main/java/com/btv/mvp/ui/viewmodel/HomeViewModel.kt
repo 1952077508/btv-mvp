@@ -1,4 +1,4 @@
-package com.btv.mvp.ui.screens
+package com.btv.mvp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
