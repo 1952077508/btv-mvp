@@ -129,12 +129,12 @@ async def get_admin_stats() -> dict:
     conn.close()
 
     room_keys = await redis.keys("room:*")
-    active_rooms = [k for k in room_keys if b":members" not in k]
+    active_rooms = [k for k in room_keys if ":members" not in k]
 
     rooms = []
     for key in active_rooms:
         room_data = await redis.hgetall(key)
-        room_id = key.decode().split(":")[1]
+        room_id = key.split(":")[1]
         members = await redis.smembers(f"room:{room_id}:members")
         rooms.append({
             "roomId": room_id,
