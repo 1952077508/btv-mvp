@@ -2,6 +2,7 @@ package com.btv.mvp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,16 +52,14 @@ class HomeViewModel : ViewModel() {
 
     fun createRoom(baseUrl: String) {
         AppLogger.i("HomeVM", "创建房间请求 -> $baseUrl/api/room/create")
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState.Loading
             try {
-                val result = withContext(Dispatchers.IO) {
-                    val request = Request.Builder()
-                        .url("$baseUrl/api/room/create")
-                        .post("{}".toRequestBody(jsonMediaType))
-                        .build()
-                    client.newCall(request).execute()
-                }
+                val request = Request.Builder()
+                    .url("$baseUrl/api/room/create")
+                    .post("{}".toRequestBody(jsonMediaType))
+                    .build()
+                val result = client.newCall(request).execute()
                 val respBody = result.body?.string() ?: ""
                 if (result.isSuccessful) {
                     val map: Map<String, Any> = gson.fromJson(
@@ -86,16 +85,14 @@ class HomeViewModel : ViewModel() {
     }
 
     fun checkRoom(baseUrl: String, roomId: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState.Loading
             try {
-                val result = withContext(Dispatchers.IO) {
-                    val request = Request.Builder()
-                        .url("$baseUrl/api/room/check/$roomId")
-                        .post("{}".toRequestBody(jsonMediaType))
-                        .build()
-                    client.newCall(request).execute()
-                }
+                val request = Request.Builder()
+                    .url("$baseUrl/api/room/check/$roomId")
+                    .post("{}".toRequestBody(jsonMediaType))
+                    .build()
+                val result = client.newCall(request).execute()
                 val respBody = result.body?.string() ?: ""
                 if (result.isSuccessful) {
                     val map: Map<String, Any> = gson.fromJson(
@@ -121,17 +118,15 @@ class HomeViewModel : ViewModel() {
 
     fun joinRoom(baseUrl: String, roomId: String) {
         AppLogger.i("HomeVM", "加入房间请求 roomId=$roomId -> $baseUrl/api/room/join")
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState.Loading
             try {
                 val body = mapOf("roomId" to roomId)
-                val result = withContext(Dispatchers.IO) {
-                    val request = Request.Builder()
-                        .url("$baseUrl/api/room/join")
-                        .post(gson.toJson(body).toRequestBody(jsonMediaType))
-                        .build()
-                    client.newCall(request).execute()
-                }
+                val request = Request.Builder()
+                    .url("$baseUrl/api/room/join")
+                    .post(gson.toJson(body).toRequestBody(jsonMediaType))
+                    .build()
+                val result = client.newCall(request).execute()
                 val respBody = result.body?.string() ?: ""
                 if (result.isSuccessful) {
                     val map: Map<String, Any> = gson.fromJson(
@@ -158,7 +153,7 @@ class HomeViewModel : ViewModel() {
 
     fun runDiagnostics(baseUrl: String) {
         AppLogger.i("HomeVM", "开始网络诊断: $baseUrl")
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState.Loading
             try {
                 val report = NetworkDiagnostics.run(baseUrl)
