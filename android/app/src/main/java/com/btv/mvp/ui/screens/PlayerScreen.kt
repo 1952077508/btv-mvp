@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,7 +87,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(Color(0xFF000000))
             ) {
                 AndroidView(
                     factory = { ctx ->
@@ -102,25 +103,13 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                if (videoUrl.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
+                if (playbackState is PlayerViewModel.PlaybackState.Idle && videoUrl.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = if (isHost) "请输入视频链接" else "等待房主添加视频...",
+                            if (isHost) "请输入视频链接" else "等待房主添加视频...",
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.White
                         )
-                    }
-                }
-
-                if (playbackState is PlayerViewModel.PlaybackState.Loading) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
                     }
                 }
             }

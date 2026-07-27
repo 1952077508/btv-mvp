@@ -1,7 +1,10 @@
 import asyncio
+import logging
 from room_service import get_room, get_members, check_host_timeout
 from ws_manager import manager
 from config import DEVIATION_THRESHOLD, HEARTBEAT_INTERVAL
+
+logger = logging.getLogger("btv.sync")
 
 
 class SyncEngine:
@@ -49,6 +52,7 @@ class SyncEngine:
             server_pos = float(room.get("current_pos", "0"))
             is_playing = room.get("is_playing", "0") == "1"
             host_id = room.get("host_id", "")
+            logger.debug(f"sync tick room={room_id} pos={server_pos} playing={is_playing} host={host_id}")
 
             if not is_playing:
                 continue
@@ -57,6 +61,7 @@ class SyncEngine:
             for member_id in members:
                 if member_id == host_id:
                     continue
+                logger.debug(f"sync correct room={room_id} guest={member_id} -> {server_pos}")
                 await manager.send_to(
                     room_id,
                     member_id,

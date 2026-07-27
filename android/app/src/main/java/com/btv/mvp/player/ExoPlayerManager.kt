@@ -10,17 +10,23 @@ import androidx.media3.exoplayer.ExoPlayer
 class ExoPlayerManager {
 
     private var player: ExoPlayer? = null
-    private var progressCallback: ((Long) -> Unit)? = null
-    private var isSeeking = false
-    private val listeners = mutableListOf<Player.Listener>()
+    var onReady: (() -> Unit)? = null
+    var onBuffering: (() -> Unit)? = null
+    var isSeeking = false
 
     @OptIn(UnstableApi::class)
     fun init(context: Context) {
         player = ExoPlayer.Builder(context).build().apply {
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_READY && !isSeeking) {
-                        progressCallback?.invoke(currentPosition)
+                    when (state) {
+                        Player.STATE_READY -> {
+                            isSeeking = false
+                            onReady?.invoke()
+                        }
+                        Player.STATE_BUFFERING -> {
+                            onBuffering?.invoke()
+                        }
                     }
                 }
             })
@@ -51,35 +57,16 @@ class ExoPlayerManager {
         player?.let { p ->
             isSeeking = true
             p.seekTo(positionMs)
-            isSeeking = false
         }
     }
 
-    fun getCurrentPosition(): Long {
-        return player?.currentPosition ?: 0L
-    }
+    fun getCurrentPosition(): Long = player?.currentPosition ?: 0L
 
-    fun isPlaying(): Boolean {
-        return player?.playWhenReady ?: false
-    }
+    fun isPlaying(): Boolean = player?.playWhenReady ?: false
 
-    fun getDuration(): Long {
-        return player?.duration?.takeIf { it > 0 } ?: 0L
-    }
+    fun getDuration(): Long = player?.duration?.takeIf { it > 0 } ?: 0L
 
-    fun setProgressListener(callback: (Long) -> Unit) {
-        progressCallback = callback
-    }
-
-    fun startProgressUpdates() {
-        player?.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) {
-                    progressCallback?.invoke(getCurrentPosition())
-                }
-            }
-        })
-    }
+    fun getPlaybackState(): Int = player?.playbackState ?: Player.STATE_IDLE
 
     fun getPlayer(): ExoPlayer? = player
 

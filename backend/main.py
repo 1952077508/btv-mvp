@@ -5,7 +5,7 @@ import logging
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(name)s %(message)s")
 logger = logging.getLogger("btv")
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header
