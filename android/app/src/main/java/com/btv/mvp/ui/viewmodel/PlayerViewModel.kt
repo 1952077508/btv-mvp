@@ -1,6 +1,7 @@
 package com.btv.mvp.ui.viewmodel
 
 import android.app.Application
+import android.view.TextureView
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.btv.mvp.network.WebSocketManager
@@ -61,14 +62,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _syncOffset = MutableStateFlow(0.0)
     val syncOffset: StateFlow<Double> = _syncOffset.asStateFlow()
 
-    fun initialize(roomId: String, userId: String, isHost: Boolean, baseUrl: String) {
+    fun initialize(roomId: String, userId: String, isHost: Boolean, baseUrl: String, textureView: TextureView) {
         this.roomId = roomId
         this.userId = userId
         this.isHost = isHost
         _roomCode.value = roomId
 
         AppLogger.i("Player", "初始化 roomId=$roomId userId=$userId isHost=$isHost")
-        exoPlayer.init(getApplication())
+        exoPlayer.init(getApplication(), textureView)
 
         exoPlayer.onReady = {
             AppLogger.d("Player", "播放器就绪")

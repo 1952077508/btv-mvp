@@ -159,7 +159,7 @@ fun HomeScreen(
                                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = {
-                                if (entry.role == "host") onNavigateToPlayer(entry.roomId, AuthManager.userId ?: "", true)
+                                if (entry.role == "host") viewModel.createRoom(baseUrl.value)
                                 else viewModel.joinRoom(baseUrl.value, entry.roomId)
                             }) { Icon(Icons.Default.Login, "加入", tint = MaterialTheme.colorScheme.primary) }
                             IconButton(onClick = { viewModel.deleteHistory(entry.roomId) }) { Icon(Icons.Default.Delete, "删除", Modifier.size(18.dp), tint = Color.Gray) }
