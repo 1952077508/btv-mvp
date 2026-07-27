@@ -18,6 +18,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.btv.mvp.data.AppLogger
 import com.btv.mvp.data.FullDiagReport
@@ -238,6 +240,7 @@ fun HomeScreen(
 
     if (showLogDialog) {
         var logEntries by remember { mutableStateOf(AppLogger.logs.reversed()) }
+        val clipboardManager = LocalClipboardManager.current
         LaunchedEffect(showLogDialog) {
             logEntries = AppLogger.logs.reversed()
         }
@@ -247,6 +250,14 @@ fun HomeScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("应用日志 (${logEntries.size})")
                     Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        val text = AppLogger.logs.joinToString("\n") { it.formatted() }
+                        clipboardManager.setText(AnnotatedString(text))
+                    }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "复制", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("复制", fontSize = 12.sp)
+                    }
                     TextButton(onClick = { AppLogger.clear(); logEntries = emptyList() }) {
                         Text("清空", fontSize = 12.sp)
                     }

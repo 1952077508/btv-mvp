@@ -20,7 +20,10 @@ import java.io.IOException
 
 class HomeViewModel : ViewModel() {
 
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
@@ -58,10 +61,10 @@ class HomeViewModel : ViewModel() {
                         .build()
                     client.newCall(request).execute()
                 }
+                val respBody = result.body?.string() ?: ""
                 if (result.isSuccessful) {
-                    val body = result.body?.string() ?: ""
                     val map: Map<String, Any> = gson.fromJson(
-                        body,
+                        respBody,
                         object : TypeToken<Map<String, Any>>() {}.type
                     )
                     val roomId = map["roomId"] as? String ?: ""
@@ -69,15 +72,15 @@ class HomeViewModel : ViewModel() {
                     AppLogger.i("HomeVM", "房间创建成功 roomId=$roomId userId=$userId")
                     _uiState.value = UiState.RoomCreated(roomId, userId)
                 } else {
-                    AppLogger.e("HomeVM", "创建房间失败 HTTP ${result.code}")
+                    AppLogger.e("HomeVM", "创建房间失败 HTTP ${result.code} body=$respBody")
                     _uiState.value = UiState.Error("创建房间失败 (HTTP ${result.code})")
                 }
             } catch (e: IOException) {
-                AppLogger.e("HomeVM", "创建房间网络异常: ${e.message}")
-                _uiState.value = UiState.Error("网络连接失败: ${e.message}")
+                AppLogger.e("HomeVM", "创建房间IO异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("网络连接失败: ${e.javaClass.simpleName}")
             } catch (e: Exception) {
-                AppLogger.e("HomeVM", "创建房间异常: ${e.message}")
-                _uiState.value = UiState.Error("发生错误: ${e.message}")
+                AppLogger.e("HomeVM", "创建房间异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("${e.javaClass.simpleName}: ${e.message}")
             }
         }
     }
@@ -93,22 +96,25 @@ class HomeViewModel : ViewModel() {
                         .build()
                     client.newCall(request).execute()
                 }
+                val respBody = result.body?.string() ?: ""
                 if (result.isSuccessful) {
-                    val body = result.body?.string() ?: ""
                     val map: Map<String, Any> = gson.fromJson(
-                        body,
+                        respBody,
                         object : TypeToken<Map<String, Any>>() {}.type
                     )
                     val exists = (map["exists"] as? Boolean) ?: false
                     val memberCount = ((map["memberCount"] as? Double)?.toInt()) ?: 0
                     _uiState.value = UiState.RoomChecked(exists, memberCount)
                 } else {
-                    _uiState.value = UiState.Error("检查房间失败")
+                    AppLogger.e("HomeVM", "检查房间失败 HTTP ${result.code} body=$respBody")
+                    _uiState.value = UiState.Error("检查房间失败 (HTTP ${result.code})")
                 }
             } catch (e: IOException) {
-                _uiState.value = UiState.Error("网络连接失败: ${e.message}")
+                AppLogger.e("HomeVM", "检查房间IO异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("网络连接失败: ${e.javaClass.simpleName}")
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("发生错误: ${e.message}")
+                AppLogger.e("HomeVM", "检查房间异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("${e.javaClass.simpleName}: ${e.message}")
             }
         }
     }
@@ -126,10 +132,10 @@ class HomeViewModel : ViewModel() {
                         .build()
                     client.newCall(request).execute()
                 }
+                val respBody = result.body?.string() ?: ""
                 if (result.isSuccessful) {
-                    val bodyStr = result.body?.string() ?: ""
                     val map: Map<String, Any> = gson.fromJson(
-                        bodyStr,
+                        respBody,
                         object : TypeToken<Map<String, Any>>() {}.type
                     )
                     val joinedRoomId = map["roomId"] as? String ?: roomId
@@ -137,15 +143,15 @@ class HomeViewModel : ViewModel() {
                     AppLogger.i("HomeVM", "加入房间成功 roomId=$joinedRoomId userId=$userId")
                     _uiState.value = UiState.RoomJoined(joinedRoomId, userId)
                 } else {
-                    AppLogger.e("HomeVM", "加入房间失败 HTTP ${result.code}")
-                    _uiState.value = UiState.Error("加入房间失败，房间不存在或已满")
+                    AppLogger.e("HomeVM", "加入房间失败 HTTP ${result.code} body=$respBody")
+                    _uiState.value = UiState.Error("加入房间失败 (HTTP ${result.code})")
                 }
             } catch (e: IOException) {
-                AppLogger.e("HomeVM", "加入房间网络异常: ${e.message}")
-                _uiState.value = UiState.Error("网络连接失败: ${e.message}")
+                AppLogger.e("HomeVM", "加入房间IO异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("网络连接失败: ${e.javaClass.simpleName}")
             } catch (e: Exception) {
-                AppLogger.e("HomeVM", "加入房间异常: ${e.message}")
-                _uiState.value = UiState.Error("发生错误: ${e.message}")
+                AppLogger.e("HomeVM", "加入房间异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("${e.javaClass.simpleName}: ${e.message}")
             }
         }
     }
@@ -163,8 +169,8 @@ class HomeViewModel : ViewModel() {
                 AppLogger.i("Diag", "诊断结果: ${report.overallHealth}")
                 _uiState.value = UiState.DiagCompleted(report)
             } catch (e: Exception) {
-                AppLogger.e("Diag", "诊断异常: ${e.message}")
-                _uiState.value = UiState.Error("诊断失败: ${e.message}")
+                AppLogger.e("Diag", "诊断异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("诊断失败: ${e.javaClass.simpleName}")
             }
         }
     }

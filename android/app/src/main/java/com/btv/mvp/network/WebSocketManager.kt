@@ -63,7 +63,7 @@ class WebSocketManager {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                AppLogger.e("WS", "连接失败: ${t.message}${if (response != null) " HTTP ${response.code}" else ""}")
+                AppLogger.e("WS", "连接失败: ${t.javaClass.simpleName}: ${t.message}${if (response != null) " HTTP ${response.code}" else ""}")
                 CoroutineScope(Dispatchers.Main).launch {
                     onDisconnect?.invoke()
                 }

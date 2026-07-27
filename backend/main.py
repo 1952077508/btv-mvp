@@ -1,8 +1,12 @@
 import uuid
 import json
 import re
+import logging
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("btv")
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -90,7 +94,13 @@ def validate_video_url(url: str) -> bool:
 @app.post("/api/room/create", response_model=CreateRoomResponse)
 async def api_create_room():
     host_id = uuid.uuid4().hex[:12]
-    room = await create_room(host_id)
+    logger.info(f"create_room host_id={host_id}")
+    try:
+        room = await create_room(host_id)
+        logger.info(f"room {room['roomId']} created")
+    except Exception as e:
+        logger.error(f"create_room failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Redis error: {e}")
     return CreateRoomResponse(
         roomId=room["roomId"],
         hostId=host_id,
@@ -100,7 +110,12 @@ async def api_create_room():
 
 @app.post("/api/room/check/{room_id}", response_model=CheckRoomResponse)
 async def api_check_room(room_id: str):
-    room = await check_room(room_id.upper())
+    room_id = room_id.upper()
+    try:
+        room = await check_room(room_id)
+    except Exception as e:
+        logger.error(f"check_room {room_id} failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     if not room:
         return CheckRoomResponse(exists=False, memberCount=0)
     return CheckRoomResponse(**room)
@@ -110,8 +125,13 @@ async def api_check_room(room_id: str):
 async def api_join_room(body: JoinRoomRequest):
     room_id = body.roomId.upper()
     user_id = uuid.uuid4().hex[:12]
+    logger.info(f"join_room room={room_id} user={user_id}")
 
-    room = await join_room(room_id, user_id)
+    try:
+        room = await join_room(room_id, user_id)
+    except Exception as e:
+        logger.error(f"join_room {room_id} failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     if not room:
         raise HTTPException(status_code=400, detail="房间不存在或已满")
 
@@ -137,6 +157,7 @@ async def ws_endpoint(ws: WebSocket, room_id: str):
             break
 
     if not user_id:
+        logger.warning(f"WS {room_id}: missing userId")
         await ws.accept()
         await ws.send_text(json.dumps({"type": "error", "payload": {"message": "缺少userId参数"}}))
         await ws.close()
@@ -144,6 +165,7 @@ async def ws_endpoint(ws: WebSocket, room_id: str):
 
     room = await get_room(room_id)
     if not room:
+        logger.warning(f"WS {room_id}: room not found for user={user_id}")
         await ws.accept()
         await ws.send_text(json.dumps({"type": "error", "payload": {"message": "房间不存在"}}))
         await ws.close()
@@ -151,6 +173,7 @@ async def ws_endpoint(ws: WebSocket, room_id: str):
 
     host_id = room.get("host_id", "")
     role = "host" if user_id == host_id else "guest"
+    logger.info(f"WS connect room={room_id} user={user_id} role={role}")
 
     await ws.accept()
     manager.add(room_id, user_id, ws)
