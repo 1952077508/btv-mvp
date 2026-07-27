@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.btv.mvp.data.AppLogger
+import com.btv.mvp.data.AuthManager
 import com.btv.mvp.data.PrefsManager
 import com.btv.mvp.ui.BTVApp
 
@@ -12,6 +13,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         PrefsManager.init(applicationContext)
+        AuthManager.init(applicationContext)
         AppLogger.init(applicationContext)
         enableEdgeToEdge()
         setContent {

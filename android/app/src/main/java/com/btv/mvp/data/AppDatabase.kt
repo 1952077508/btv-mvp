@@ -12,6 +12,14 @@ data class LogEntity(
     @ColumnInfo(name = "message") val message: String
 )
 
+@Entity(tableName = "room_history")
+data class RoomHistoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(name = "room_id") val roomId: String,
+    @ColumnInfo(name = "role") val role: String,
+    @ColumnInfo(name = "joined_at") val joinedAt: Long
+)
+
 @Dao
 interface LogDao {
     @Insert
@@ -30,9 +38,25 @@ interface LogDao {
     suspend fun clearAll()
 }
 
-@Database(entities = [LogEntity::class], version = 1, exportSchema = false)
+@Dao
+interface RoomHistoryDao {
+    @Insert
+    suspend fun insert(entry: RoomHistoryEntity)
+
+    @Query("SELECT * FROM room_history ORDER BY joined_at DESC LIMIT 30")
+    suspend fun getAll(): List<RoomHistoryEntity>
+
+    @Query("DELETE FROM room_history WHERE room_id = :roomId")
+    suspend fun deleteByRoomId(roomId: String)
+
+    @Query("DELETE FROM room_history")
+    suspend fun clearAll()
+}
+
+@Database(entities = [LogEntity::class, RoomHistoryEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun logDao(): LogDao
+    abstract fun roomHistoryDao(): RoomHistoryDao
 
     companion object {
         @Volatile
@@ -44,7 +68,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "btv_logs.db"
-                ).build().also { instance = it }
+                ).fallbackToDestructiveMigration().build().also { instance = it }
             }
         }
     }

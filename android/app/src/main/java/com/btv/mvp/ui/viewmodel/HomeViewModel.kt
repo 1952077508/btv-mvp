@@ -1,25 +1,22 @@
 package com.btv.mvp.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.CoroutineScope
+import com.btv.mvp.data.*
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import com.btv.mvp.data.AppLogger
-import com.btv.mvp.data.FullDiagReport
-import com.btv.mvp.data.NetworkDiagnostics
 import java.io.IOException
 
-class HomeViewModel : ViewModel() {
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
@@ -35,6 +32,7 @@ class HomeViewModel : ViewModel() {
         data class RoomJoined(val roomId: String, val userId: String) : UiState()
         data class RoomChecked(val exists: Boolean, val memberCount: Int) : UiState()
         data class DiagCompleted(val report: FullDiagReport) : UiState()
+        data class HistoryLoaded(val entries: List<RoomHistoryEntry>) : UiState()
         data class Error(val message: String) : UiState()
     }
 
@@ -44,129 +42,138 @@ class HomeViewModel : ViewModel() {
     private val _roomCode = MutableStateFlow("")
     val roomCode: StateFlow<String> = _roomCode.asStateFlow()
 
+    private val _roomHistory = MutableStateFlow<List<RoomHistoryEntry>>(emptyList())
+    val roomHistory: StateFlow<List<RoomHistoryEntry>> = _roomHistory.asStateFlow()
+
     fun updateRoomCode(code: String) {
-        if (code.length <= 6) {
-            _roomCode.value = code.uppercase()
-        }
+        if (code.length <= 6) _roomCode.value = code.uppercase()
     }
 
     fun createRoom(baseUrl: String) {
-        AppLogger.i("HomeVM", "创建房间请求 -> $baseUrl/api/room/create")
+        AppLogger.i("HomeVM", "创建房间")
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState.Loading
             try {
                 val request = Request.Builder()
                     .url("$baseUrl/api/room/create")
+                    .header("X-User-Id", AuthManager.userId ?: "")
                     .post("{}".toRequestBody(jsonMediaType))
                     .build()
                 val result = client.newCall(request).execute()
                 val respBody = result.body?.string() ?: ""
                 if (result.isSuccessful) {
-                    val map: Map<String, Any> = gson.fromJson(
-                        respBody,
-                        object : TypeToken<Map<String, Any>>() {}.type
-                    )
+                    val map: Map<String, Any> = gson.fromJson(respBody, object : TypeToken<Map<String, Any>>() {}.type)
                     val roomId = map["roomId"] as? String ?: ""
                     val userId = map["hostId"] as? String ?: ""
-                    AppLogger.i("HomeVM", "房间创建成功 roomId=$roomId userId=$userId")
+                    AppLogger.i("HomeVM", "房间创建成功 $roomId")
+                    saveLocalHistory(roomId, "host")
                     _uiState.value = UiState.RoomCreated(roomId, userId)
                 } else {
-                    AppLogger.e("HomeVM", "创建房间失败 HTTP ${result.code} body=$respBody")
+                    AppLogger.e("HomeVM", "创建失败 HTTP ${result.code}")
                     _uiState.value = UiState.Error("创建房间失败 (HTTP ${result.code})")
                 }
             } catch (e: IOException) {
-                AppLogger.e("HomeVM", "创建房间IO异常: ${e.javaClass.simpleName}: ${e.message}")
-                _uiState.value = UiState.Error("网络连接失败: ${e.javaClass.simpleName}")
+                AppLogger.e("HomeVM", "创建IO异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("网络错误: ${e.javaClass.simpleName}")
             } catch (e: Exception) {
-                AppLogger.e("HomeVM", "创建房间异常: ${e.javaClass.simpleName}: ${e.message}")
-                _uiState.value = UiState.Error("${e.javaClass.simpleName}: ${e.message}")
-            }
-        }
-    }
-
-    fun checkRoom(baseUrl: String, roomId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.value = UiState.Loading
-            try {
-                val request = Request.Builder()
-                    .url("$baseUrl/api/room/check/$roomId")
-                    .post("{}".toRequestBody(jsonMediaType))
-                    .build()
-                val result = client.newCall(request).execute()
-                val respBody = result.body?.string() ?: ""
-                if (result.isSuccessful) {
-                    val map: Map<String, Any> = gson.fromJson(
-                        respBody,
-                        object : TypeToken<Map<String, Any>>() {}.type
-                    )
-                    val exists = (map["exists"] as? Boolean) ?: false
-                    val memberCount = ((map["memberCount"] as? Double)?.toInt()) ?: 0
-                    _uiState.value = UiState.RoomChecked(exists, memberCount)
-                } else {
-                    AppLogger.e("HomeVM", "检查房间失败 HTTP ${result.code} body=$respBody")
-                    _uiState.value = UiState.Error("检查房间失败 (HTTP ${result.code})")
-                }
-            } catch (e: IOException) {
-                AppLogger.e("HomeVM", "检查房间IO异常: ${e.javaClass.simpleName}: ${e.message}")
-                _uiState.value = UiState.Error("网络连接失败: ${e.javaClass.simpleName}")
-            } catch (e: Exception) {
-                AppLogger.e("HomeVM", "检查房间异常: ${e.javaClass.simpleName}: ${e.message}")
-                _uiState.value = UiState.Error("${e.javaClass.simpleName}: ${e.message}")
+                AppLogger.e("HomeVM", "创建异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("${e.javaClass.simpleName}")
             }
         }
     }
 
     fun joinRoom(baseUrl: String, roomId: String) {
-        AppLogger.i("HomeVM", "加入房间请求 roomId=$roomId -> $baseUrl/api/room/join")
+        AppLogger.i("HomeVM", "加入房间 $roomId")
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState.Loading
             try {
                 val body = mapOf("roomId" to roomId)
                 val request = Request.Builder()
                     .url("$baseUrl/api/room/join")
+                    .header("X-User-Id", AuthManager.userId ?: "")
                     .post(gson.toJson(body).toRequestBody(jsonMediaType))
                     .build()
                 val result = client.newCall(request).execute()
                 val respBody = result.body?.string() ?: ""
                 if (result.isSuccessful) {
-                    val map: Map<String, Any> = gson.fromJson(
-                        respBody,
-                        object : TypeToken<Map<String, Any>>() {}.type
-                    )
+                    val map: Map<String, Any> = gson.fromJson(respBody, object : TypeToken<Map<String, Any>>() {}.type)
                     val joinedRoomId = map["roomId"] as? String ?: roomId
                     val userId = map["userId"] as? String ?: ""
-                    AppLogger.i("HomeVM", "加入房间成功 roomId=$joinedRoomId userId=$userId")
+                    AppLogger.i("HomeVM", "加入房间成功 $joinedRoomId")
+                    saveLocalHistory(joinedRoomId, "guest")
                     _uiState.value = UiState.RoomJoined(joinedRoomId, userId)
                 } else {
-                    AppLogger.e("HomeVM", "加入房间失败 HTTP ${result.code} body=$respBody")
+                    AppLogger.e("HomeVM", "加入失败 HTTP ${result.code}")
                     _uiState.value = UiState.Error("加入房间失败 (HTTP ${result.code})")
                 }
             } catch (e: IOException) {
-                AppLogger.e("HomeVM", "加入房间IO异常: ${e.javaClass.simpleName}: ${e.message}")
-                _uiState.value = UiState.Error("网络连接失败: ${e.javaClass.simpleName}")
+                AppLogger.e("HomeVM", "加入IO异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("网络错误: ${e.javaClass.simpleName}")
             } catch (e: Exception) {
-                AppLogger.e("HomeVM", "加入房间异常: ${e.javaClass.simpleName}: ${e.message}")
-                _uiState.value = UiState.Error("${e.javaClass.simpleName}: ${e.message}")
+                AppLogger.e("HomeVM", "加入异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("${e.javaClass.simpleName}")
             }
         }
     }
 
+    fun loadHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val db = AppDatabase.getInstance(getApplication())
+                val entries = db.roomHistoryDao().getAll().map {
+                    RoomHistoryEntry(it.roomId, it.role, it.joinedAt)
+                }
+                _roomHistory.value = entries
+                _uiState.value = UiState.HistoryLoaded(entries)
+            } catch (e: Exception) {
+                AppLogger.e("HomeVM", "加载历史失败: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteHistory(roomId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val db = AppDatabase.getInstance(getApplication())
+                db.roomHistoryDao().deleteByRoomId(roomId)
+                loadHistory()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun runDiagnostics(baseUrl: String) {
-        AppLogger.i("HomeVM", "开始网络诊断: $baseUrl")
+        AppLogger.i("HomeVM", "网络诊断: $baseUrl")
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState.Loading
             try {
                 val report = NetworkDiagnostics.run(baseUrl)
                 for (r in report.results) {
-                    val status = if (r.success) "PASS" else "FAIL"
-                    AppLogger.i("Diag", "$status ${r.step}: ${r.detail} (${r.durationMs}ms)")
+                    val s = if (r.success) "PASS" else "FAIL"
+                    AppLogger.i("Diag", "$s ${r.step}: ${r.detail} (${r.durationMs}ms)")
                 }
-                AppLogger.i("Diag", "诊断结果: ${report.overallHealth}")
+                AppLogger.i("Diag", "结果: ${report.overallHealth}")
                 _uiState.value = UiState.DiagCompleted(report)
             } catch (e: Exception) {
-                AppLogger.e("Diag", "诊断异常: ${e.javaClass.simpleName}: ${e.message}")
-                _uiState.value = UiState.Error("诊断失败: ${e.javaClass.simpleName}")
+                AppLogger.e("Diag", "异常: ${e.javaClass.simpleName}: ${e.message}")
+                _uiState.value = UiState.Error("诊断失败")
             }
         }
     }
+
+    private fun saveLocalHistory(roomId: String, role: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val db = AppDatabase.getInstance(getApplication())
+                db.roomHistoryDao().insert(
+                    RoomHistoryEntity(roomId = roomId, role = role, joinedAt = System.currentTimeMillis())
+                )
+            } catch (_: Exception) {}
+        }
+    }
 }
+
+data class RoomHistoryEntry(
+    val roomId: String,
+    val role: String,
+    val joinedAt: Long
+)
