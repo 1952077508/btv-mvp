@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.ui.PlayerView
+import com.btv.mvp.data.PrefsManager
 import com.btv.mvp.ui.viewmodel.PlayerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,7 +42,7 @@ fun PlayerScreen(
     var showSyncResult by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        viewModel.initialize(roomId, userId, isHost, "http://10.0.2.2:8000")
+        viewModel.initialize(roomId, userId, isHost, PrefsManager.serverUrl)
     }
 
     LaunchedEffect(syncState) {

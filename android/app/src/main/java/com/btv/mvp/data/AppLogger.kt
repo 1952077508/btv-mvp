@@ -1,5 +1,7 @@
 package com.btv.mvp.data
 
+import android.content.Context
+import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -24,6 +26,26 @@ object AppLogger {
     @Volatile
     var listener: ((Entry) -> Unit)? = null
 
+    private var db: AppDatabase? = null
+    private var scope: CoroutineScope? = null
+    private var initialized = false
+
+    @Synchronized
+    fun init(context: Context) {
+        if (initialized) return
+        initialized = true
+        db = AppDatabase.getInstance(context)
+        scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+        scope?.launch {
+            val entities = db?.logDao()?.getRecent(500) ?: emptyList()
+            _logs.clear()
+            _logs.addAll(entities.map { entity ->
+                Entry(entity.timestamp, Level.valueOf(entity.level), entity.tag, entity.message)
+            }.reversed())
+        }
+    }
+
     @Synchronized
     fun log(level: Level, tag: String, message: String) {
         val entry = Entry(System.currentTimeMillis(), level, tag, message)
@@ -32,6 +54,20 @@ object AppLogger {
             _logs.removeAt(0)
         }
         listener?.invoke(entry)
+
+        scope?.launch {
+            try {
+                db?.logDao()?.insert(
+                    LogEntity(
+                        timestamp = entry.timestamp,
+                        level = entry.level.name,
+                        tag = entry.tag,
+                        message = entry.message
+                    )
+                )
+                db?.logDao()?.trimTo(500)
+            } catch (_: Exception) {}
+        }
     }
 
     fun i(tag: String, message: String) = log(Level.INFO, tag, message)
@@ -42,5 +78,8 @@ object AppLogger {
     @Synchronized
     fun clear() {
         _logs.clear()
+        scope?.launch {
+            try { db?.logDao()?.clearAll() } catch (_: Exception) {}
+        }
     }
 }

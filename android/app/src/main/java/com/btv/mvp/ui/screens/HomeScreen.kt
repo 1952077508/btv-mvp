@@ -23,6 +23,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.btv.mvp.data.AppLogger
 import com.btv.mvp.data.FullDiagReport
+import com.btv.mvp.data.PrefsManager
 import com.btv.mvp.ui.viewmodel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,7 +35,7 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val roomCode by viewModel.roomCode.collectAsState()
 
-    val baseUrl = remember { mutableStateOf("http://10.0.2.2:8000") }
+    val baseUrl = remember { mutableStateOf(PrefsManager.serverUrl) }
     var showServerDialog by remember { mutableStateOf(false) }
     var showDiagDialog by remember { mutableStateOf(false) }
     var showLogDialog by remember { mutableStateOf(false) }
@@ -179,6 +180,7 @@ fun HomeScreen(
             confirmButton = {
                 TextButton(onClick = {
                     baseUrl.value = serverUrl.trimEnd('/')
+                    PrefsManager.serverUrl = baseUrl.value
                     showServerDialog = false
                 }) {
                     Text("确定")
