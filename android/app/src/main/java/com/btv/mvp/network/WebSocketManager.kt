@@ -2,6 +2,7 @@ package com.btv.mvp.network
 
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.btv.mvp.data.AppLogger
 import kotlinx.coroutines.*
 import okhttp3.*
 import java.util.concurrent.TimeUnit
@@ -23,10 +24,13 @@ class WebSocketManager {
 
     fun connect(url: String, userId: String) {
         val wsUrl = "$url?userId=$userId"
+        AppLogger.i("WS", "连接: $wsUrl")
         val request = Request.Builder().url(wsUrl).build()
 
         ws = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {}
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                AppLogger.i("WS", "连接已建立")
+            }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
@@ -34,23 +38,32 @@ class WebSocketManager {
                         text,
                         object : TypeToken<Map<String, Any>>() {}.type
                     )
+                    val type = map["type"] as? String ?: "?"
+                    if (type != "heartbeat" && type != "correct") {
+                        AppLogger.d("WS", "收到: type=$type")
+                    }
                     CoroutineScope(Dispatchers.Main).launch {
                         onMessage?.invoke(map)
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    AppLogger.e("WS", "消息解析失败: ${e.message}")
+                }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                AppLogger.w("WS", "关闭中 code=$code reason=$reason")
                 webSocket.close(1000, null)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                AppLogger.w("WS", "已关闭 code=$code")
                 CoroutineScope(Dispatchers.Main).launch {
                     onDisconnect?.invoke()
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                AppLogger.e("WS", "连接失败: ${t.message}${if (response != null) " HTTP ${response.code}" else ""}")
                 CoroutineScope(Dispatchers.Main).launch {
                     onDisconnect?.invoke()
                 }
@@ -60,7 +73,11 @@ class WebSocketManager {
 
     fun send(type: String, payload: Map<String, Any> = emptyMap()) {
         val msg = mapOf("type" to type, "payload" to payload)
-        ws?.send(gson.toJson(msg))
+        val json = gson.toJson(msg)
+        if (type != "heartbeat") {
+            AppLogger.d("WS", "发送: type=$type")
+        }
+        ws?.send(json)
     }
 
     fun startHeartbeat(positionProvider: () -> Long, isPlayingProvider: () -> Boolean) {

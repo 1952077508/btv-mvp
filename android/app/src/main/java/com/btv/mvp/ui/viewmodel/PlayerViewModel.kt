@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.btv.mvp.network.WebSocketManager
 import com.btv.mvp.player.ExoPlayerManager
+import com.btv.mvp.data.AppLogger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,6 +67,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         this.isHost = isHost
         _roomCode.value = roomId
 
+        AppLogger.i("Player", "初始化 roomId=$roomId userId=$userId isHost=$isHost baseUrl=$baseUrl")
         exoPlayer.init(getApplication())
 
         val wsBase = baseUrl.replace("http://", "ws://").replace("https://", "wss://")
@@ -73,9 +75,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         wsManager.onMessage = { msg -> handleWsMessage(msg) }
         wsManager.onDisconnect = {
+            AppLogger.w("Player", "WebSocket 断开")
             _syncState.value = SyncState.Disconnected
         }
 
+        AppLogger.i("Player", "WebSocket 连接中: $wsUrl")
         wsManager.connect(wsUrl, userId)
         _syncState.value = SyncState.Connected
 
@@ -83,6 +87,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun play() {
+        AppLogger.d("Player", "本地操作: play pos=${exoPlayer.getCurrentPosition()}")
         exoPlayer.play()
         _playbackState.value = PlaybackState.Playing
         lastLocalActionTime = System.currentTimeMillis()
@@ -93,6 +98,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun pause() {
+        AppLogger.d("Player", "本地操作: pause pos=${exoPlayer.getCurrentPosition()}")
         exoPlayer.pause()
         _playbackState.value = PlaybackState.Paused
         lastLocalActionTime = System.currentTimeMillis()
@@ -103,6 +109,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun seekTo(positionMs: Long) {
+        AppLogger.d("Player", "本地操作: seek ${positionMs}ms")
         exoPlayer.seekTo(positionMs)
         _currentPosition.value = positionMs
         lastLocalActionTime = System.currentTimeMillis()
@@ -114,6 +121,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun changeVideo(url: String) {
         if (!isHost) return
+        AppLogger.i("Player", "切换视频: $url")
         _videoUrl.value = url
         exoPlayer.setVideoUrl(url)
         _playbackState.value = PlaybackState.Loading
@@ -122,6 +130,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun requestSync() {
+        AppLogger.d("Player", "手动同步请求")
         wsManager.send("sync_request", mapOf(
             "position" to (exoPlayer.getCurrentPosition() / 1000.0)
         ))
@@ -152,12 +161,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             "welcome" -> {
                 val role = payload["role"] as? String ?: "guest"
                 isHost = role == "host"
+                AppLogger.i("Player", "WS welcome: role=$role")
             }
 
             "room_state" -> {
                 val url = payload["videoUrl"] as? String ?: ""
                 val position = ((payload["position"] as? Number)?.toDouble() ?: 0.0) * 1000
                 val isPlaying = payload["isPlaying"] as? Boolean ?: false
+                AppLogger.i("Player", "WS room_state: video=${url.take(50)} pos=$position isPlaying=$isPlaying")
 
                 if (url.isNotEmpty()) {
                     _videoUrl.value = url
@@ -173,6 +184,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             "play" -> {
                 val position = ((payload["position"] as? Number)?.toDouble() ?: 0.0) * 1000
+                AppLogger.d("Player", "WS play: pos=$position")
                 if (abs(exoPlayer.getCurrentPosition() - position.toLong()) > 500) {
                     exoPlayer.seekTo(position.toLong())
                 }
@@ -182,6 +194,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             "pause" -> {
                 val position = ((payload["position"] as? Number)?.toDouble() ?: 0.0) * 1000
+                AppLogger.d("Player", "WS pause: pos=$position")
                 if (abs(exoPlayer.getCurrentPosition() - position.toLong()) > 500) {
                     exoPlayer.seekTo(position.toLong())
                 }
@@ -191,16 +204,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             "seek" -> {
                 val targetMs = ((payload["position"] as? Number)?.toDouble() ?: 0.0) * 1000
-                if (cooldownActive()) return
+                if (cooldownActive()) {
+                    AppLogger.d("Player", "WS seek 忽略 (冷静期): target=${targetMs}ms")
+                    return
+                }
+                AppLogger.d("Player", "WS seek: target=${targetMs}ms")
                 exoPlayer.seekTo(targetMs.toLong())
                 _currentPosition.value = targetMs.toLong()
             }
 
             "correct" -> {
-                if (cooldownActive()) return
+                if (cooldownActive()) {
+                    AppLogger.d("Player", "WS correct 忽略 (冷静期)")
+                    return
+                }
                 val targetMs = ((payload["targetPosition"] as? Number)?.toDouble() ?: 0.0) * 1000
                 val currentMs = exoPlayer.getCurrentPosition()
-                if (abs(currentMs - targetMs.toLong()) > 500) {
+                val diff = abs(currentMs - targetMs.toLong())
+                if (diff > 500) {
+                    AppLogger.d("Player", "WS correct: target=${targetMs}ms diff=${diff}ms")
                     exoPlayer.seekTo(targetMs.toLong())
                     _currentPosition.value = targetMs.toLong()
                 }
@@ -213,6 +235,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             "sync_response" -> {
                 val offset = (payload["offset"] as? Number)?.toDouble() ?: 0.0
+                AppLogger.d("Player", "WS sync_response: offset=$offset")
                 _syncOffset.value = offset
                 _syncState.value = SyncState.Synced(offset)
                 if (abs(offset) > 0.5) {
@@ -224,6 +247,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             "video_changed" -> {
                 val url = payload["videoUrl"] as? String ?: ""
+                AppLogger.i("Player", "WS video_changed: ${url.take(50)}")
                 if (url.isNotEmpty()) {
                     _videoUrl.value = url
                     exoPlayer.setVideoUrl(url)
@@ -232,7 +256,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             "room_closed" -> {
+                AppLogger.w("Player", "WS room_closed")
                 _syncState.value = SyncState.RoomClosed
+            }
+
+            "error" -> {
+                val msg = payload["message"] as? String ?: "unknown"
+                AppLogger.e("Player", "WS error: $msg")
+            }
+
+            else -> {
+                AppLogger.d("Player", "WS unknown type: $type")
             }
         }
     }
